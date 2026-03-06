@@ -24,7 +24,7 @@ import { detectExecutionContext, formatErrorOutput, formatCompletionMessage } fr
 import { createProgressManager } from './progress-manager.js';
 import { createAuditLogger } from './audit-logger.js';
 import { getActualModelName } from './router-utils.js';
-import { resolveModel, type ModelTier } from './models.js';
+import { resolveModel, DEFAULT_GEMINI_MODEL, type ModelTier } from './models.js';
 import type { ActivityLogger } from '../types/activity-logger.js';
 
 declare global {
@@ -194,6 +194,18 @@ export async function validateAgentOutput(
   }
 }
 
+function applyGeminiAutoConfiguration(sdkEnv: Record<string, string>): void {
+  if (!sdkEnv['GEMINI_API_KEY'] || sdkEnv['ANTHROPIC_BASE_URL']) return;
+
+  const geminiModel = sdkEnv['GEMINI_MODEL'] || DEFAULT_GEMINI_MODEL;
+  sdkEnv['ANTHROPIC_BASE_URL'] = 'https://generativelanguage.googleapis.com/v1beta/openai/';
+  sdkEnv['ANTHROPIC_API_KEY'] = sdkEnv['GEMINI_API_KEY'];
+  sdkEnv['ANTHROPIC_MODEL'] = geminiModel;
+  if (!sdkEnv['ANTHROPIC_SMALL_MODEL']) sdkEnv['ANTHROPIC_SMALL_MODEL'] = geminiModel;
+  if (!sdkEnv['ANTHROPIC_MEDIUM_MODEL']) sdkEnv['ANTHROPIC_MEDIUM_MODEL'] = geminiModel;
+  if (!sdkEnv['ANTHROPIC_LARGE_MODEL']) sdkEnv['ANTHROPIC_LARGE_MODEL'] = geminiModel;
+}
+
 // Low-level SDK execution. Handles message streaming, progress, and audit logging.
 // Exported for Temporal activities to call single-attempt execution.
 export async function runClaudePrompt(
@@ -242,12 +254,17 @@ export async function runClaudePrompt(
     'ANTHROPIC_SMALL_MODEL',
     'ANTHROPIC_MEDIUM_MODEL',
     'ANTHROPIC_LARGE_MODEL',
+    'GEMINI_API_KEY',
+    'GEMINI_MODEL',
   ];
   for (const name of passthroughVars) {
     if (process.env[name]) {
       sdkEnv[name] = process.env[name]!;
     }
   }
+
+  // Auto-configure Gemini Direct API mode
+  applyGeminiAutoConfiguration(sdkEnv);
 
   // 5. Configure SDK options
   const options = {

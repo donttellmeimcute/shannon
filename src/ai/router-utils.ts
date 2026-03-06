@@ -4,6 +4,8 @@
 // it under the terms of the GNU Affero General Public License version 3
 // as published by the Free Software Foundation.
 
+import { DEFAULT_GEMINI_MODEL } from './models.js';
+
 /**
  * Get the actual model name being used.
  * When using claude-code-router, the SDK reports its configured model (claude-sonnet)
@@ -20,6 +22,12 @@ export function getActualModelName(sdkReportedModel?: string): string | undefine
     if (parts.length >= 2) {
       return parts.slice(1).join(','); // Handle model names with commas
     }
+  }
+
+  // If Gemini Direct API mode is active, report the Gemini model
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  if (geminiApiKey) {
+    return process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
   }
 
   // Fall back to SDK-reported model
