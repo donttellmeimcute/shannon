@@ -24,7 +24,7 @@ import { PentestError, isRetryableError } from './error-handling.js';
 import { ErrorCode } from '../types/errors.js';
 import { type Result, ok, err } from '../types/result.js';
 import { parseConfig } from '../config-parser.js';
-import { resolveModel } from '../ai/models.js';
+import { resolveModel, DEFAULT_GEMINI_MODEL } from '../ai/models.js';
 import type { ActivityLogger } from '../types/activity-logger.js';
 
 // === Repository Validation ===
@@ -160,13 +160,22 @@ function classifySdkError(
 async function validateCredentials(
   logger: ActivityLogger
 ): Promise<Result<void, PentestError>> {
-  // 1. Router mode — can't validate provider keys, just warn
+  // 1. Gemini Direct API mode — validate API key is present
+  if (process.env.GEMINI_API_KEY) {
+    if (!process.env.GEMINI_MODEL) {
+      logger.warn(`GEMINI_API_KEY set but GEMINI_MODEL not specified — defaulting to ${DEFAULT_GEMINI_MODEL}`);
+    }
+    logger.info('Gemini Direct API credentials OK');
+    return ok(undefined);
+  }
+
+  // 2. Router mode — can't validate provider keys, just warn
   if (process.env.ANTHROPIC_BASE_URL) {
     logger.warn('Router mode detected — skipping API credential validation');
     return ok(undefined);
   }
 
-  // 2. Bedrock mode — validate required AWS credentials are present
+  // 3. Bedrock mode — validate required AWS credentials are present
   if (process.env.CLAUDE_CODE_USE_BEDROCK === '1') {
     const required = ['AWS_REGION', 'AWS_BEARER_TOKEN_BEDROCK', 'ANTHROPIC_SMALL_MODEL', 'ANTHROPIC_MEDIUM_MODEL', 'ANTHROPIC_LARGE_MODEL'];
     const missing = required.filter(v => !process.env[v]);
@@ -185,7 +194,7 @@ async function validateCredentials(
     return ok(undefined);
   }
 
-  // 3. Vertex AI mode — validate required GCP credentials are present
+  // 4. Vertex AI mode — validate required GCP credentials are present
   if (process.env.CLAUDE_CODE_USE_VERTEX === '1') {
     const required = ['CLOUD_ML_REGION', 'ANTHROPIC_VERTEX_PROJECT_ID', 'ANTHROPIC_SMALL_MODEL', 'ANTHROPIC_MEDIUM_MODEL', 'ANTHROPIC_LARGE_MODEL'];
     const missing = required.filter(v => !process.env[v]);
@@ -230,11 +239,11 @@ async function validateCredentials(
     return ok(undefined);
   }
 
-  // 4. Check that at least one credential is present
+  // 5. Check that at least one credential is present
   if (!process.env.ANTHROPIC_API_KEY && !process.env.CLAUDE_CODE_OAUTH_TOKEN) {
     return err(
       new PentestError(
-        'No API credentials found. Set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in .env (or use CLAUDE_CODE_USE_BEDROCK=1 for AWS Bedrock, or CLAUDE_CODE_USE_VERTEX=1 for Google Vertex AI)',
+        'No API credentials found. Set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in .env (or use CLAUDE_CODE_USE_BEDROCK=1 for AWS Bedrock, CLAUDE_CODE_USE_VERTEX=1 for Google Vertex AI, or GEMINI_API_KEY for Gemini Direct API)',
         'config',
         false,
         {},
@@ -243,7 +252,7 @@ async function validateCredentials(
     );
   }
 
-  // 5. Validate via SDK query
+  // 6. Validate via SDK query
   const authType = process.env.CLAUDE_CODE_OAUTH_TOKEN ? 'OAuth token' : 'API key';
   logger.info(`Validating ${authType} via SDK...`);
 

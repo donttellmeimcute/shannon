@@ -24,14 +24,20 @@ const DEFAULT_MODELS: Readonly<Record<ModelTier, string>> = {
   large: 'claude-opus-4-6',
 };
 
+/** Default Gemini model used when GEMINI_MODEL is not explicitly set. */
+export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+
 /** Resolve a model tier to a concrete model ID. */
 export function resolveModel(tier: ModelTier = 'medium'): string {
+  // Gemini Direct API mode: use configured Gemini model unless tier is explicitly overridden
+  const geminiModel = process.env.GEMINI_API_KEY ? (process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL) : null;
+
   switch (tier) {
     case 'small':
-      return process.env.ANTHROPIC_SMALL_MODEL || DEFAULT_MODELS.small;
+      return process.env.ANTHROPIC_SMALL_MODEL || geminiModel || DEFAULT_MODELS.small;
     case 'large':
-      return process.env.ANTHROPIC_LARGE_MODEL || DEFAULT_MODELS.large;
+      return process.env.ANTHROPIC_LARGE_MODEL || geminiModel || DEFAULT_MODELS.large;
     default:
-      return process.env.ANTHROPIC_MEDIUM_MODEL || DEFAULT_MODELS.medium;
+      return process.env.ANTHROPIC_MEDIUM_MODEL || geminiModel || DEFAULT_MODELS.medium;
   }
 }
